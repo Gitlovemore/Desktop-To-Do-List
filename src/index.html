@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>FloatingTodo</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --acc:   #7c6ef7;
+  --acc2:  #a855f7;
+  --work:  #3b9eff;
+  --work2: #06b6d4;
+  --self:  #f97316;
+  --self2: #f43f5e;
+  --bg:    rgba(13,13,26,0.94);
+  --bdr:   rgba(124,110,247,0.2);
+  --text:  rgba(255,255,255,0.88);
+  --mute:  rgba(255,255,255,0.26);
+  --red:   #ff4d6d;
+  --r:     16px;
+}
+
+html, body {
+  width:360px; height:620px;
+  overflow:hidden; background:transparent;
+  font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  user-select:none;
+}
+
+#app { width:100%; height:100%; position:relative; padding:12px; }
+
+/* ── FAB ── */
+#fab {
+  position:absolute; top:12px; right:12px;
+  width:52px; height:52px; border-radius:15px;
+  background:linear-gradient(145deg,var(--acc),var(--acc2));
+  box-shadow:0 6px 24px rgba(124,110,247,.55);
+  display:flex; align-items:center; justify-content:center;
+  cursor:grab; z-index:100;
+  transition:box-shadow .2s, transform .15s;
+}
+#fab:hover { transform:scale(1.07); box-shadow:0 10px 32px rgba(124,110,247,.7); }
+#fab svg { width:22px; height:22px; fill:#fff; pointer-events:none; }
+
+#badge {
+  position:absolute; top:-6px; right:-6px;
+  min-width:18px; height:18px; padding:0 4px; border-radius:9px;
+  background:var(--red); color:#fff; font-size:10px; font-weight:700;
+  font-family:'SF Mono',monospace;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 6px rgba(255,77,109,.5); pointer-events:none;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+#badge.hide { transform:scale(0); }
+#badge.pop  { animation:bpop .28s cubic-bezier(.34,1.56,.64,1); }
+@keyframes bpop { 50%{transform:scale(1.5);} }
+
+/* ── Panel ── */
+#panel {
+  position:absolute; top:74px; right:12px;
+  width:324px; max-height:510px;
+  background:var(--bg);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid var(--bdr); border-radius:var(--r);
+  box-shadow:0 24px 64px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.04);
+  display:flex; flex-direction:column; overflow:hidden;
+  transform-origin:top right;
+  transition:transform .3s cubic-bezier(.34,1.1,.64,1), opacity .22s ease;
+  z-index:99;
+}
+#panel.hide { transform:scale(.84) translateY(-8px); opacity:0; pointer-events:none; }
+
+/* header */
+.hd { padding:13px 15px 10px; border-bottom:1px solid rgba(255,255,255,.06); flex-shrink:0; }
+.hd-label { font-size:10px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--mute); font-family:'SF Mono',monospace; }
+.hd-count { margin-top:2px; font-size:20px; font-weight:300; color:#fff; }
+.hd-count b { font-weight:700; }
+.prog-wrap { margin-top:8px; height:2px; background:rgba(255,255,255,.07); border-radius:1px; overflow:hidden; }
+.prog-bar  { height:100%; border-radius:1px; transition:width .4s cubic-bezier(.4,0,.2,1); }
+
+/* ── Tabs ── */
+.tabs {
+  display:flex; flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.tab {
+  flex:1; padding:9px 0; text-align:center;
+  font-size:12px; font-weight:600; cursor:pointer;
+  color:var(--mute); border:none; background:none;
+  transition:color .18s, box-shadow .18s;
+  position:relative; letter-spacing:.5px;
+}
+.tab::after {
+  content:''; position:absolute; bottom:0; left:15%; right:15%;
+  height:2px; border-radius:1px;
+  transform:scaleX(0); transition:transform .22s cubic-bezier(.34,1.2,.64,1);
+}
+.tab.work::after  { background:linear-gradient(90deg,var(--work),var(--work2)); }
+.tab.self::after  { background:linear-gradient(90deg,var(--self),var(--self2)); }
+.tab.work.on { color:var(--work); }
+.tab.self.on { color:var(--self); }
+.tab.on::after { transform:scaleX(1); }
+
+.tab-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:15px; height:15px; padding:0 3px;
+  border-radius:8px; font-size:9px; font-weight:700;
+  margin-left:4px; vertical-align:middle;
+  transition:transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+.tab.work .tab-badge { background:rgba(59,158,255,.25); color:var(--work); }
+.tab.self .tab-badge { background:rgba(249,115,22,.25); color:var(--self); }
+.tab-badge.zero { transform:scale(0); }
+
+/* input */
+.inp-row {
+  padding:8px 11px; border-bottom:1px solid rgba(255,255,255,.06);
+  display:flex; gap:6px; flex-shrink:0;
+}
+.inp {
+  flex:1; background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.1); border-radius:9px;
+  padding:7px 10px; color:var(--text); font-size:13px;
+  outline:none; transition:border-color .2s, background .2s; font-family:inherit;
+}
+.inp::placeholder { color:rgba(255,255,255,.2); }
+.inp.work:focus { border-color:rgba(59,158,255,.55); background:rgba(59,158,255,.07); }
+.inp.self:focus { border-color:rgba(249,115,22,.55);  background:rgba(249,115,22,.07); }
+.add-btn {
+  width:31px; height:31px; border-radius:8px; border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .15s, box-shadow .2s; flex-shrink:0;
+}
+.add-btn.work { background:linear-gradient(145deg,var(--work),var(--work2)); }
+.add-btn.self { background:linear-gradient(145deg,var(--self),var(--self2)); }
+.add-btn:hover { transform:scale(1.1); }
+.add-btn:active { transform:scale(.93); }
+.add-btn svg { width:14px; height:14px; fill:#fff; }
+
+/* list */
+.list { overflow-y:auto; flex:1; padding:4px 0; }
+.list::-webkit-scrollbar { width:3px; }
+.list::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:2px; }
+
+.empty {
+  padding:26px 16px; text-align:center;
+  color:rgba(255,255,255,.16); font-size:13px;
+  display:none; flex-direction:column; align-items:center; gap:6px;
+}
+.empty.show { display:flex; }
+.empty svg { opacity:.18; }
+
+/* item */
+.item {
+  display:flex; align-items:center;
+  padding:7px 11px; gap:9px;
+  transition:background .15s;
+  animation:fadeIn .22s cubic-bezier(.34,1.2,.64,1);
+}
+@keyframes fadeIn { from{opacity:0;transform:translateX(10px);} }
+.item:hover { background:rgba(255,255,255,.04); }
+
+/* category dot */
+.cat-dot {
+  width:6px; height:6px; border-radius:50%; flex-shrink:0; margin-right:-2px;
+}
+.cat-dot.work { background:var(--work); box-shadow:0 0 4px rgba(59,158,255,.6); }
+.cat-dot.self { background:var(--self); box-shadow:0 0 4px rgba(249,115,22,.6); }
+
+.chk {
+  width:17px; height:17px; border-radius:5px; flex-shrink:0; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .18s; background:transparent;
+}
+.chk svg { opacity:0; transition:opacity .14s; width:10px; }
+.item.work-item .chk { border:1.5px solid rgba(59,158,255,.4); }
+.item.self-item .chk { border:1.5px solid rgba(249,115,22,.4); }
+.item.work-item .chk:hover { border-color:var(--work); background:rgba(59,158,255,.12); }
+.item.self-item .chk:hover { border-color:var(--self); background:rgba(249,115,22,.12); }
+.item.done.work-item .chk { background:linear-gradient(145deg,var(--work),var(--work2)); border-color:transparent; }
+.item.done.self-item .chk { background:linear-gradient(145deg,var(--self),var(--self2)); border-color:transparent; }
+.item.done .chk svg { opacity:1; }
+
+.txt { flex:1; font-size:13px; color:var(--text); line-height:1.4; word-break:break-all; transition:color .2s; }
+.item.done .txt { color:rgba(255,255,255,.22); text-decoration:line-through; }
+
+.del {
+  width:19px; height:19px; border-radius:5px;
+  background:transparent; border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .15s, background .15s; flex-shrink:0;
+}
+.del svg { width:11px; height:11px; fill:var(--red); }
+.item:hover .del { opacity:1; }
+.del:hover { background:rgba(255,77,109,.15); }
+.item.out { animation:fadeOut .2s ease forwards; }
+@keyframes fadeOut { to{opacity:0;transform:translateX(14px);max-height:0;padding-top:0;padding-bottom:0;} }
+
+/* footer */
+.ft {
+  padding:7px 11px; border-top:1px solid rgba(255,255,255,.06);
+  display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+}
+.ft-info { font-size:10px; color:rgba(255,255,255,.18); font-family:'SF Mono',monospace; }
+.ft-btns { display:flex; gap:10px; align-items:center; }
+.ft-btn {
+  font-size:10px; color:rgba(168,139,250,.5);
+  background:none; border:none; cursor:pointer;
+  font-family:'SF Mono',monospace; transition:color .15s; padding:0;
+}
+.ft-btn:hover { color:#a78bfa; }
+.ft-btn.active { color:#a78bfa; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- FAB -->
+  <div id="fab">
+    <svg viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+    <div id="badge" class="hide">0</div>
+  </div>
+
+  <!-- Panel -->
+  <div id="panel" class="hide">
+
+    <!-- Header -->
+    <div class="hd">
+      <div class="hd-label">TODAY'S TASKS</div>
+      <div class="hd-count" id="hd-count">暂无任务</div>
+      <div class="prog-wrap"><div class="prog-bar" id="prog" style="width:0%"></div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab work on" id="tab-work" onclick="switchTab('work')">
+        💼 工作<span class="tab-badge zero" id="wb">0</span>
+      </button>
+      <button class="tab self" id="tab-self" onclick="switchTab('self')">
+        🌿 个人<span class="tab-badge zero" id="sb">0</span>
+      </button>
+    </div>
+
+    <!-- Input -->
+    <div class="inp-row">
+      <input class="inp work" id="inp" placeholder="添加工作任务..." maxlength="60">
+      <button class="add-btn work" id="add-btn">
+        <svg viewBox="0 0 24 24"><path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z"/></svg>
+      </button>
+    </div>
+
+    <!-- List -->
+    <div class="list" id="list">
+      <div class="empty show" id="empty">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="rgba(255,255,255,.6)">
+          <path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+        </svg>
+        <span id="empty-txt">暂无工作任务</span>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="ft">
+      <span class="ft-info" id="ft-info">0 项待办</span>
+      <div class="ft-btns">
+        <button class="ft-btn" id="auto-btn">开机自启: 检测中...</button>
+        <button class="ft-btn" id="clr-btn">清除已完成</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const fab     = document.getElementById('fab');
+const panel   = document.getElementById('panel');
+const badge   = document.getElementById('badge');
+const inp     = document.getElementById('inp');
+const addBtn  = document.getElementById('add-btn');
+const list    = document.getElementById('list');
+const empty   = document.getElementById('empty');
+const emptyTx = document.getElementById('empty-txt');
+const prog    = document.getElementById('prog');
+const hdCount = document.getElementById('hd-count');
+const ftInfo  = document.getElementById('ft-info');
+const clrBtn  = document.getElementById('clr-btn');
+const autoBtn = document.getElementById('auto-btn');
+const tabWork = document.getElementById('tab-work');
+const tabSelf = document.getElementById('tab-self');
+const wBadge  = document.getElementById('wb');
+const sBadge  = document.getElementById('sb');
+
+// ── State ─────────────────────────────────────────────────────────
+// todos: [{ text, done, cat }]  cat = 'work' | 'self'
+let todos = JSON.parse(localStorage.getItem('ft2') || '[]');
+let tab   = 'work';   // active tab
+let open  = false;
+
+// ── Mouse passthrough ─────────────────────────────────────────────
+function enterUI() { if (window.api) window.api.setIgnoreMouse(false); }
+function leaveUI() { if (window.api) window.api.setIgnoreMouse(true);  }
+fab.addEventListener('mouseenter', enterUI);
+fab.addEventListener('mouseleave', leaveUI);
+panel.addEventListener('mouseenter', enterUI);
+panel.addEventListener('mouseleave', leaveUI);
+
+// ── Drag ─────────────────────────────────────────────────────────
+let dragging=false, downT=0, downSX=0, downSY=0, winX=0, winY=0;
+
+fab.addEventListener('mousedown', async e => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  dragging=false; downT=Date.now(); downSX=e.screenX; downSY=e.screenY;
+  if (window.api) { const p=await window.api.getWinPos(); winX=p.x; winY=p.y; }
+  const onMove = ev => {
+    const dx=ev.screenX-downSX, dy=ev.screenY-downSY;
+    if (!dragging && (Math.abs(dx)>4||Math.abs(dy)>4)) { dragging=true; fab.style.cursor='grabbing'; }
+    if (dragging && window.api) window.api.moveWin(winX+dx, winY+dy);
+  };
+  const onUp = () => {
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+    fab.style.cursor='grab';
+    setTimeout(()=>{ dragging=false; },50);
+  };
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+});
+
+fab.addEventListener('click', () => {
+  if (dragging) return;
+  if (Date.now()-downT>500) return;
+  open=!open;
+  panel.classList.toggle('hide',!open);
+  if (open) setTimeout(()=>inp.focus(),40);
+});
+
+document.addEventListener('mousedown', e => {
+  if (open && !panel.contains(e.target) && !fab.contains(e.target)) {
+    open=false; panel.classList.add('hide');
+  }
+});
+
+// ── Tabs ──────────────────────────────────────────────────────────
+function switchTab(t) {
+  tab = t;
+  tabWork.classList.toggle('on', t==='work');
+  tabSelf.classList.toggle('on', t==='self');
+  // update input style
+  inp.className = 'inp ' + t;
+  inp.placeholder = t==='work' ? '添加工作任务...' : '添加个人任务...';
+  addBtn.className = 'add-btn ' + t;
+  emptyTx.textContent = t==='work' ? '暂无工作任务' : '暂无个人任务';
+  render();
+  inp.focus();
+}
+
+// ── Auto-launch ───────────────────────────────────────────────────
+let autoOn = false;
+async function initAutoLaunch() {
+  if (!window.api) return;
+  autoOn = await window.api.getAutoLaunch();
+  renderAutoBtn();
+}
+function renderAutoBtn() {
+  autoBtn.textContent = '开机自启: '+(autoOn?'已开启':'已关闭');
+  autoBtn.classList.toggle('active', autoOn);
+}
+autoBtn.addEventListener('click', () => {
+  autoOn=!autoOn; renderAutoBtn();
+  if (window.api) window.api.setAutoLaunch(autoOn);
+});
+initAutoLaunch();
+
+// ── Render ────────────────────────────────────────────────────────
+function render() {
+  [...list.querySelectorAll('.item')].forEach(el=>el.remove());
+
+  const all     = todos;
+  const total   = all.length;
+  const doneAll = all.filter(t=>t.done).length;
+  const pendAll = total - doneAll;
+
+  // badge on FAB
+  badge.textContent = pendAll > 99 ? '99+' : pendAll;
+  badge.classList.toggle('hide', pendAll===0);
+
+  // tab badges
+  const wPend = todos.filter(t=>t.cat==='work'&&!t.done).length;
+  const sPend = todos.filter(t=>t.cat==='self'&&!t.done).length;
+  wBadge.textContent = wPend; wBadge.classList.toggle('zero', wPend===0);
+  sBadge.textContent = sPend; sBadge.classList.toggle('zero', sPend===0);
+
+  // header
+  if (total===0)        hdCount.innerHTML='暂无任务';
+  else if (pendAll===0) hdCount.innerHTML='全部完成 🎉';
+  else {
+    const wc=todos.filter(t=>t.cat==='work'&&!t.done).length;
+    const sc=todos.filter(t=>t.cat==='self'&&!t.done).length;
+    hdCount.innerHTML =
+      (wc ? '<b style="color:#3b9eff">'+wc+'</b> 工作 ' : '') +
+      (sc ? '<b style="color:#f97316">'+sc+'</b> 个人' : '');
+  }
+
+  // progress bar color by tab
+  const tabColor = tab==='work'
+    ? 'linear-gradient(90deg,#3b9eff,#06b6d4)'
+    : 'linear-gradient(90deg,#f97316,#f43f5e)';
+  prog.style.background = tabColor;
+
+  // current tab items
+  const cur = todos.filter(t => t.cat === tab);
+  const curDone = cur.filter(t=>t.done).length;
+  prog.style.width = cur.length===0 ? '0%' : (curDone/cur.length*100)+'%';
+
+  const curPend = cur.filter(t=>!t.done).length;
+  ftInfo.textContent = curPend+' 项待办 · '+curDone+' 项已完成';
+
+  empty.classList.toggle('show', cur.length===0);
+
+  // render items for current tab
+  cur.forEach(todo => {
+    const i = todos.indexOf(todo);
+    const el = document.createElement('div');
+    el.className = 'item '+(tab===('work')?'work-item':'self-item')+(todo.done?' done':'');
+    el.innerHTML =
+      '<div class="cat-dot '+tab+'"></div>'+
+      '<div class="chk">'+
+        '<svg viewBox="0 0 24 24" fill="#fff"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'+
+      '</div>'+
+      '<span class="txt">'+esc(todo.text)+'</span>'+
+      '<button class="del">'+
+        '<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>'+
+      '</button>';
+    el.querySelector('.chk').addEventListener('click', ()=>{ todos[i].done=!todos[i].done; save(); render(); });
+    el.querySelector('.del').addEventListener('click', ()=>{
+      el.classList.add('out');
+      setTimeout(()=>{ todos.splice(i,1); save(); render(); }, 200);
+    });
+    list.appendChild(el);
+  });
+}
+
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function save(){ localStorage.setItem('ft2', JSON.stringify(todos)); }
+
+function addTodo() {
+  const text = inp.value.trim();
+  if (!text) return;
+  todos.unshift({ text, done:false, cat:tab });
+  save(); render();
+  inp.value='';
+  badge.classList.add('pop');
+  setTimeout(()=>badge.classList.remove('pop'),300);
+}
+
+addBtn.addEventListener('click', addTodo);
+inp.addEventListener('keydown', e => e.key==='Enter' && addTodo());
+clrBtn.addEventListener('click', ()=>{
+  todos = todos.filter(t => !(t.done && t.cat===tab));
+  save(); render();
+});
+
+render();
+</script>
+</body>
+</html>

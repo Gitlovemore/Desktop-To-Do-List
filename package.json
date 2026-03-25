@@ -1,0 +1,47 @@
+{
+  "name": "floating-todo",
+  "version": "1.0.0",
+  "description": "Floating desktop todo list",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "dependencies": {
+    "auto-launch": "^5.0.5"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.floatingtodo.app",
+    "productName": "FloatingTodo",
+    "asar": true,
+    "directories": { "output": "dist" },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "nsis",     "arch": ["x64"] }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "portable": {
+      "artifactName": "FloatingTodo-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FloatingTodo",
+      "artifactName": "FloatingTodo-Setup.exe"
+    }
+  }
+}
