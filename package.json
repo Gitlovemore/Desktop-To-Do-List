@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64"
+    "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac --arm64 --x64",
+    "build:all": "electron-builder --win --mac"
   },
   "dependencies": {
     "auto-launch": "^5.0.5"
@@ -18,17 +20,35 @@
     "appId": "com.floatingtodo.app",
     "productName": "FloatingTodo",
     "asar": true,
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "files": [
       "main.js",
       "preload.js",
       "src/**/*",
       "assets/**/*"
     ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
     "win": {
       "target": [
-        { "target": "portable", "arch": ["x64"] },
-        { "target": "nsis",     "arch": ["x64"] }
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "requestedExecutionLevel": "asInvoker"
     },
